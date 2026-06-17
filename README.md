@@ -73,7 +73,7 @@ browser.
 
 ```
 src/
-├─ core/            🧠 pure, framework-free logic (unit-tested)
+├─ core/            pure, framework-free logic (unit-tested)
 │  ├─ model/        Diagram/Node/Edge types + id helpers
 │  └─ serialize/    model → Mermaid text
 ├─ store/           Zustand store — live React Flow state; converts to the model
@@ -87,30 +87,10 @@ src/
 └─ App.tsx          layout shell
 ```
 
-## Roadmap / good first features
-
-- [x] Render node **shapes** on the canvas (custom React Flow node).
-- [x] Per-edge **arrow direction** (`-->`, `<--`, `<-->`, `---`).
-- [x] **Subgraphs** (Mermaid `subgraph ... end`) via React Flow group nodes —
-      create from the toolbar, assign nodes via the Inspector, and connect edges
-      to/from a subgraph. _Next: drag a node into a group instead of using the
-      dropdown; nested-subgraph UI._
-- [x] **Undo / redo** (toolbar buttons + Ctrl/Cmd+Z, Shift for redo).
-- [x] **Keyboard delete** (Backspace/Delete) for nodes, edges, and subgraphs
-      (deleting a subgraph keeps its members, un-grouping them).
-- [x] **Pan / Select tool modes** — pan by default; toggle Select from the
-      canvas controls or press **V** to box-select (auto-returns to Pan).
-      Shift+drag also box-selects in Pan mode. Inspector opens only for a single
-      selection.
-- [x] **Help dialog** (toolbar **? Help** / press **?**) documenting controls
-      and keyboard shortcuts.
+## TODO
+- [ ] Nested subgraph support
 - [ ] Save / load diagrams (localStorage + download/upload `.json` and `.mmd`).
 - [ ] More diagram types (sequence, class, state).
-- [ ] **Import**: parse existing Mermaid text → model. This is the hard one;
-      start with flowcharts and treat it as best-effort.
+- [ ] **Import**: parse existing Mermaid text → model
 - [ ] Undo / redo.
 - [ ] Export the preview as SVG / PNG.
-
-## License
-
-[MIT](./LICENSE)
