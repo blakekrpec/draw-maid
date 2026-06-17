@@ -46,6 +46,8 @@ export interface Subgraph {
   label: string;
   /** Id of the enclosing subgraph, if this one is nested. */
   parentId?: string;
+  /** Optional layout direction override inside this subgraph (emitted as `direction LR` etc). */
+  direction?: FlowDirection;
 }
 
 export interface DiagramEdge {

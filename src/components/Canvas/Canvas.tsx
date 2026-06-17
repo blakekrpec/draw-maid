@@ -34,6 +34,7 @@ export function Canvas() {
   const onNodesChange = useDiagramStore((s) => s.onNodesChange);
   const onEdgesChange = useDiagramStore((s) => s.onEdgesChange);
   const onConnect = useDiagramStore((s) => s.onConnect);
+  const onReconnect = useDiagramStore((s) => s.onReconnect);
   const beginInteraction = useDiagramStore((s) => s.beginInteraction);
   const selectNode = useDiagramStore((s) => s.selectNode);
   const selectEdge = useDiagramStore((s) => s.selectEdge);
@@ -91,6 +92,7 @@ export function Canvas() {
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}
+      onReconnect={onReconnect}
       onNodeDragStart={beginInteraction}
       onSelectionChange={onSelectionChange}
       onBeforeDelete={onBeforeDelete}

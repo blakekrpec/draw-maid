@@ -19,6 +19,7 @@ import {
   addEdge,
   applyEdgeChanges,
   applyNodeChanges,
+  reconnectEdge,
   type Connection,
   type EdgeChange,
   type NodeChange,
@@ -28,21 +29,23 @@ import {
   nextNodeId,
   nextSubgraphId,
   serialize,
+  type Diagram,
   type EdgeDir,
   type FlowDirection,
   type NodeShape,
 } from '../core';
 import {
+  byId,
+  diagramToFlow,
   flowToDiagram,
   isGroupNode,
   isShapeNode,
+  sortParentsFirst,
   type FlowEdge,
   type FlowNode,
   type GroupFlowNode,
   type ShapeFlowNode,
 } from '../lib/flowAdapter';
-
-const byId = (nodes: FlowNode[]) => new Map(nodes.map((n) => [n.id, n]));
 
 /** A node's absolute position (React Flow stores child positions relative to the parent). */
 function absolutePosition(node: FlowNode, nodes: Map<string, FlowNode>) {
@@ -57,24 +60,6 @@ function absolutePosition(node: FlowNode, nodes: Map<string, FlowNode>) {
     parentId = parent.parentId;
   }
   return { x, y };
-}
-
-function nestingDepth(node: FlowNode, nodes: Map<string, FlowNode>) {
-  let depth = 0;
-  let parentId = node.parentId;
-  const seen = new Set<string>();
-  while (parentId && nodes.has(parentId) && !seen.has(parentId)) {
-    seen.add(parentId);
-    depth++;
-    parentId = nodes.get(parentId)!.parentId;
-  }
-  return depth;
-}
-
-/** React Flow requires every parent to appear before its children in the array. */
-function sortParentsFirst(nodes: FlowNode[]): FlowNode[] {
-  const map = byId(nodes);
-  return [...nodes].sort((a, b) => nestingDepth(a, map) - nestingDepth(b, map));
 }
 
 interface Snapshot {
@@ -103,6 +88,8 @@ interface DiagramState {
   toggleMode: () => void;
   helpOpen: boolean;
   setHelpOpen: (open: boolean) => void;
+  importOpen: boolean;
+  setImportOpen: (open: boolean) => void;
 
   /** Generated Mermaid source for the current diagram. */
   code: () => string;
@@ -117,10 +104,13 @@ interface DiagramState {
   // Subgraph actions
   addSubgraph: () => void;
   updateSubgraphLabel: (id: string, label: string) => void;
+  setSubgraphDirection: (id: string, direction: FlowDirection | undefined) => void;
   removeSubgraph: (id: string) => void;
 
   // Edge actions
   onConnect: (connection: Connection) => void;
+  /** Drag an existing edge's endpoint onto a different node/handle. */
+  onReconnect: (oldEdge: FlowEdge, newConnection: Connection) => void;
   updateEdgeLabel: (id: string, label: string) => void;
   setEdgeDir: (id: string, dir: EdgeDir) => void;
   removeEdge: (id: string) => void;
@@ -144,6 +134,7 @@ interface DiagramState {
   // Diagram-level
   setDirection: (direction: FlowDirection) => void;
   clear: () => void;
+  loadDiagram: (diagram: Diagram) => void;
 }
 
 export const useDiagramStore = create<DiagramState>((set, get) => {
@@ -186,6 +177,8 @@ export const useDiagramStore = create<DiagramState>((set, get) => {
     toggleMode: () => set((s) => ({ mode: s.mode === 'pan' ? 'select' : 'pan' })),
     helpOpen: false,
     setHelpOpen: (helpOpen) => set({ helpOpen }),
+    importOpen: false,
+    setImportOpen: (importOpen) => set({ importOpen }),
 
     code: () => serialize(flowToDiagram(get().nodes, get().edges, get().direction)),
 
@@ -288,6 +281,15 @@ export const useDiagramStore = create<DiagramState>((set, get) => {
       }));
     },
 
+    setSubgraphDirection: (id, direction) => {
+      record();
+      set((s) => ({
+        nodes: s.nodes.map((n) =>
+          n.id === id && isGroupNode(n) ? { ...n, data: { ...n.data, direction } } : n,
+        ),
+      }));
+    },
+
     removeSubgraph: (id) => {
       record();
       set((s) => {
@@ -317,6 +319,14 @@ export const useDiagramStore = create<DiagramState>((set, get) => {
           s.edges,
         ),
       }));
+    },
+
+    onReconnect: (oldEdge, newConnection) => {
+      if (!newConnection.source || !newConnection.target) return;
+      record();
+      // reconnectEdge preserves the edge id (and thus its data/label/dir) while
+      // swapping in the new source/target and handles.
+      set((s) => ({ edges: reconnectEdge(oldEdge, newConnection, s.edges) }));
     },
 
     updateEdgeLabel: (id, label) => {
@@ -442,6 +452,18 @@ export const useDiagramStore = create<DiagramState>((set, get) => {
     clear: () => {
       record();
       set({ nodes: [], edges: [], selectedNodeId: null, selectedEdgeId: null });
+    },
+
+    loadDiagram: (diagram) => {
+      record();
+      const { nodes, edges } = diagramToFlow(diagram);
+      set({
+        nodes,
+        edges,
+        direction: diagram.direction,
+        selectedNodeId: null,
+        selectedEdgeId: null,
+      });
     },
   };
 });

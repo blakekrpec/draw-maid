@@ -60,6 +60,7 @@ export function serializeFlowchart(diagram: Diagram): string {
 
   const emitSubgraph = (subgraph: Subgraph, indent: string) => {
     lines.push(`${indent}subgraph ${subgraph.id} ["${escapeLabel(subgraph.label)}"]`);
+    if (subgraph.direction) lines.push(`${indent}  direction ${subgraph.direction}`);
     for (const node of nodesIn(subgraph.id)) lines.push(`${indent}  ${nodeDeclaration(node)}`);
     for (const child of childSubgraphs(subgraph.id)) emitSubgraph(child, `${indent}  `);
     lines.push(`${indent}end`);

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useDiagramStore } from '../../store/diagramStore';
 import { isGroupNode, isShapeNode } from '../../lib/flowAdapter';
-import type { EdgeDir, NodeShape } from '../../core';
+import type { EdgeDir, FlowDirection, NodeShape } from '../../core';
 
 const SHAPES: { value: NodeShape; label: string }[] = [
   { value: 'rectangle', label: 'Rectangle' },
@@ -9,6 +9,14 @@ const SHAPES: { value: NodeShape; label: string }[] = [
   { value: 'stadium', label: 'Stadium (pill)' },
   { value: 'circle', label: 'Circle' },
   { value: 'diamond', label: 'Diamond (decision)' },
+];
+
+const SUBGRAPH_DIRS: { value: FlowDirection | ''; label: string }[] = [
+  { value: '', label: '(inherit from diagram)' },
+  { value: 'TB', label: 'Top → Bottom' },
+  { value: 'BT', label: 'Bottom → Top' },
+  { value: 'LR', label: 'Left → Right' },
+  { value: 'RL', label: 'Right → Left' },
 ];
 
 const EDGE_DIRS: { value: EdgeDir; label: string }[] = [
@@ -33,6 +41,7 @@ export function Inspector() {
   const setNodeSubgraph = useDiagramStore((s) => s.setNodeSubgraph);
   const removeNode = useDiagramStore((s) => s.removeNode);
   const updateSubgraphLabel = useDiagramStore((s) => s.updateSubgraphLabel);
+  const setSubgraphDirection = useDiagramStore((s) => s.setSubgraphDirection);
   const removeSubgraph = useDiagramStore((s) => s.removeSubgraph);
   const updateEdgeLabel = useDiagramStore((s) => s.updateEdgeLabel);
   const setEdgeDir = useDiagramStore((s) => s.setEdgeDir);
@@ -102,8 +111,27 @@ export function Inspector() {
               className={fieldClass}
             />
           </label>
+          <label className="block text-sm text-slate-600">
+            Direction
+            <select
+              value={group.data.direction ?? ''}
+              onChange={(e) =>
+                setSubgraphDirection(
+                  group.id,
+                  (e.target.value as FlowDirection) || undefined,
+                )
+              }
+              className={fieldClass}
+            >
+              {SUBGRAPH_DIRS.map((d) => (
+                <option key={d.value} value={d.value}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <p className="text-xs text-slate-400">
-            Assign nodes to this subgraph from each node's “Subgraph” dropdown.
+            Assign nodes to this subgraph from each node's "Subgraph" dropdown.
           </p>
           <button
             onClick={() => removeSubgraph(group.id)}

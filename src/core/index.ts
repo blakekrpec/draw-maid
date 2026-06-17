@@ -7,3 +7,4 @@
 export * from './model/types';
 export * from './model/ids';
 export * from './serialize';
+export * from './parse';

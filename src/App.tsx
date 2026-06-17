@@ -6,6 +6,7 @@ import { Inspector } from './components/Inspector/Inspector';
 import { CodePanel } from './components/CodePanel/CodePanel';
 import { Preview } from './components/Preview/Preview';
 import { HelpDialog } from './components/Help/HelpDialog';
+import { ImportDialog } from './components/ImportDialog/ImportDialog';
 import { useDiagramStore } from './store/diagramStore';
 
 const isTypingTarget = (el: EventTarget | null) => {
@@ -71,6 +72,7 @@ export default function App() {
         </div>
       </div>
       <HelpDialog />
+      <ImportDialog />
     </ReactFlowProvider>
   );
 }

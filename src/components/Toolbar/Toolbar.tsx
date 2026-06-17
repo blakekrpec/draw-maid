@@ -19,6 +19,7 @@ export function Toolbar() {
   const canUndo = useDiagramStore((s) => s.past.length > 0);
   const canRedo = useDiagramStore((s) => s.future.length > 0);
   const setHelpOpen = useDiagramStore((s) => s.setHelpOpen);
+  const setImportOpen = useDiagramStore((s) => s.setImportOpen);
 
   return (
     <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2">
@@ -76,6 +77,14 @@ export function Toolbar() {
       </button>
 
       <div className="flex-1" />
+
+      <button
+        onClick={() => setImportOpen(true)}
+        title="Import Mermaid text"
+        className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+      >
+        Import
+      </button>
 
       <button
         onClick={() => setHelpOpen(true)}
