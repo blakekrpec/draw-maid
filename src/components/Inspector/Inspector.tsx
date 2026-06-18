@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useDiagramStore } from '../../store/diagramStore';
 import { isGroupNode, isShapeNode } from '../../lib/flowAdapter';
 import type { EdgeDir, FlowDirection, NodeShape } from '../../core';
+import type { FlowNode } from '../../lib/flowAdapter';
 
 const SHAPES: { value: NodeShape; label: string }[] = [
   { value: 'rectangle', label: 'Rectangle' },
@@ -28,6 +29,29 @@ const EDGE_DIRS: { value: EdgeDir; label: string }[] = [
 
 const fieldClass = 'mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm';
 
+/**
+ * Check if making subgraphId a child of potentialParentId would create a cycle.
+ * This prevents circular nesting like: A -> B -> C -> A
+ */
+function wouldCreateCycle(
+  subgraphId: string,
+  potentialParentId: string,
+  nodes: FlowNode[],
+): boolean {
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+  let current: string | undefined = potentialParentId;
+  const seen = new Set<string>();
+  
+  while (current) {
+    if (current === subgraphId) return true; // Found a cycle
+    if (seen.has(current)) break; // Infinite loop protection
+    seen.add(current);
+    current = nodeMap.get(current)?.parentId;
+  }
+  
+  return false;
+}
+
 /** Context panel for the current selection: a shape node, a subgraph, or an edge. */
 export function Inspector() {
   const selected = useDiagramStore((s) => s.nodes.find((n) => n.id === s.selectedNodeId));
@@ -42,6 +66,7 @@ export function Inspector() {
   const removeNode = useDiagramStore((s) => s.removeNode);
   const updateSubgraphLabel = useDiagramStore((s) => s.updateSubgraphLabel);
   const setSubgraphDirection = useDiagramStore((s) => s.setSubgraphDirection);
+  const setSubgraphParent = useDiagramStore((s) => s.setSubgraphParent);
   const removeSubgraph = useDiagramStore((s) => s.removeSubgraph);
   const updateEdgeLabel = useDiagramStore((s) => s.updateEdgeLabel);
   const setEdgeDir = useDiagramStore((s) => s.setEdgeDir);
@@ -49,6 +74,14 @@ export function Inspector() {
 
   const node = selected && isShapeNode(selected) ? selected : undefined;
   const group = selected && isGroupNode(selected) ? selected : undefined;
+
+  // Filter subgraphs available as parents - exclude self and any that would create a cycle
+  const availableParentSubgraphs = useMemo(() => {
+    if (!group) return [];
+    return subgraphs.filter(
+      (sg) => sg.id !== group.id && !wouldCreateCycle(group.id, sg.id, nodes),
+    );
+  }, [group, subgraphs, nodes]);
 
   return (
     <section className="border-b border-slate-200 p-3">
@@ -110,6 +143,21 @@ export function Inspector() {
               onChange={(e) => updateSubgraphLabel(group.id, e.target.value)}
               className={fieldClass}
             />
+          </label>
+          <label className="block text-sm text-slate-600">
+            Parent subgraph
+            <select
+              value={group.parentId ?? ''}
+              onChange={(e) => setSubgraphParent(group.id, e.target.value || null)}
+              className={fieldClass}
+            >
+              <option value="">(none - top level)</option>
+              {availableParentSubgraphs.map((sg) => (
+                <option key={sg.id} value={sg.id}>
+                  {sg.data.label}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="block text-sm text-slate-600">
             Direction

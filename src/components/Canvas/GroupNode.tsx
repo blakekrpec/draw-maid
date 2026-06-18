@@ -19,8 +19,12 @@ export function GroupNode({ data, selected }: NodeProps<GroupFlowNode>) {
         className={`h-full w-full rounded-md border-2 border-dashed bg-slate-500/5 ${
           selected ? 'border-blue-500' : 'border-slate-400'
         }`}
+        style={{ pointerEvents: selected ? 'auto' : 'none' }}
       >
-        <span className="absolute left-2 top-1 text-xs font-semibold text-slate-500">
+        <span 
+          className="absolute left-2 top-1 text-xs font-semibold text-slate-500"
+          style={{ pointerEvents: 'auto' }}
+        >
           {data.label}
         </span>
       </div>

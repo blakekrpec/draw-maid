@@ -123,18 +123,32 @@ function bestHandles(
 // Estimated rendered node dimensions (generous; real size depends on the label).
 const NODE_W = 130;
 const NODE_H = 44;
-const GROUP_PAD_X = 40; // padding on each side inside the group
-const GROUP_PAD_Y = 50; // padding top/bottom (top is larger to clear the label)
+const GROUP_PAD_X = 60; // padding on each side inside the group (increased from 40)
+const GROUP_PAD_Y = 70; // padding top/bottom (increased from 50)
 const LABEL_H = 24;     // height reserved for the subgraph label at the top
 
 /**
  * Compute the minimum group (subgraph container) dimensions needed to hold
- * the given child nodes at their assigned relative positions.
+ * the given child nodes and child subgraphs at their assigned relative positions.
  */
-function requiredGroupSize(children: { position: Vec2 }[]): { width: number; height: number } {
-  if (children.length === 0) return { width: 200, height: 120 };
-  const maxX = Math.max(...children.map((n) => n.position.x + NODE_W));
-  const maxY = Math.max(...children.map((n) => n.position.y + NODE_H));
+function requiredGroupSize(
+  childNodes: { position: Vec2 }[],
+  childSubgraphs: Array<{ position: Vec2; width: number; height: number }> = [],
+): { width: number; height: number } {
+  if (childNodes.length === 0 && childSubgraphs.length === 0) {
+    return { width: 200, height: 120 };
+  }
+  
+  const items: Array<{ x: number; y: number; w: number; h: number }> = [
+    ...childNodes.map((n) => ({ x: n.position.x, y: n.position.y, w: NODE_W, h: NODE_H })),
+    ...childSubgraphs.map((sg) => ({ x: sg.position.x, y: sg.position.y, w: sg.width, h: sg.height })),
+  ];
+  
+  if (items.length === 0) return { width: 200, height: 120 };
+  
+  const maxX = Math.max(...items.map((item) => item.x + item.w));
+  const maxY = Math.max(...items.map((item) => item.y + item.h));
+  
   return {
     width: Math.max(200, maxX + GROUP_PAD_X),
     height: Math.max(120, maxY + GROUP_PAD_Y + LABEL_H),
@@ -151,33 +165,70 @@ export function diagramToFlow(diagram: Diagram): { nodes: FlowNode[]; edges: Flo
 
   // Absolute positions keyed by node/group id — needed for handle computation.
   const absPos = new Map<string, Vec2>();
+  
+  // Z-index counter for proper layering (increments as we add nodes)
+  let zIndex = 0;
 
-  // ── Size every top-level subgraph based on its child node positions ─────────
+  // ── Calculate sizes for all subgraphs (bottom-up, deepest first) ────────────
+  const subgraphSizes = new Map<string, { width: number; height: number }>();
+  
+  // Build a map of subgraph children
+  const subgraphChildren = new Map<string, string[]>();
+  for (const sg of diagram.subgraphs) {
+    if (sg.parentId) {
+      const siblings = subgraphChildren.get(sg.parentId) || [];
+      siblings.push(sg.id);
+      subgraphChildren.set(sg.parentId, siblings);
+    }
+  }
+  
+  // Calculate sizes recursively from deepest to shallowest
+  const calculateSubgraphSize = (sgId: string): { width: number; height: number } => {
+    if (subgraphSizes.has(sgId)) return subgraphSizes.get(sgId)!;
+    
+    // Get direct child nodes
+    const childNodes = diagram.nodes.filter((n) => n.subgraphId === sgId);
+    
+    // Get direct child subgraphs and calculate their sizes first (recursion)
+    const childSgIds = subgraphChildren.get(sgId) || [];
+    const childSubgraphs = childSgIds.map((childId) => {
+      const childSize = calculateSubgraphSize(childId);
+      // Use a default relative position for nested subgraphs during size calculation
+      // Increased spacing: was 20 + i*16, now 30 + i*24
+      const childIndex = childSgIds.indexOf(childId);
+      return {
+        position: { x: 30 + childIndex * 24, y: 50 + childIndex * 24 },
+        width: childSize.width,
+        height: childSize.height,
+      };
+    });
+    
+    const size = requiredGroupSize(childNodes, childSubgraphs);
+    subgraphSizes.set(sgId, size);
+    return size;
+  };
+  
+  // Calculate all subgraph sizes
+  for (const sg of diagram.subgraphs) {
+    calculateSubgraphSize(sg.id);
+  }
+
+  // ── Lay out top-level items (subgraphs then nodes) along the primary axis ───
   const topSubs = diagram.subgraphs.filter((s) => !s.parentId);
   const nestedSubs = diagram.subgraphs.filter((s) => s.parentId);
   const topNodes = diagram.nodes.filter((n) => !n.subgraphId);
-
-  const sgSize = new Map(
-    topSubs.map((sg) => [
-      sg.id,
-      requiredGroupSize(diagram.nodes.filter((n) => n.subgraphId === sg.id)),
-    ]),
-  );
-
-  // ── Lay out top-level items (subgraphs then nodes) along the primary axis ───
-  // Subgraphs are declared first in almost all Mermaid source, so they go first.
-  // Top-level nodes (connectors / entry/exit points) follow.
-  const ITEM_GAP = 80; // gap between consecutive items
-  let cursor = 80;
+  
+  const ITEM_GAP = 120; // gap between consecutive items (increased from 80)
+  let cursor = 100; // starting position (increased from 80)
 
   // Maximum cross-axis size among subgraphs (used to centre nodes alongside them).
   const maxSgCross = topSubs.length
-    ? Math.max(...topSubs.map((sg) => (horizontal ? sgSize.get(sg.id)!.height : sgSize.get(sg.id)!.width)))
+    ? Math.max(...topSubs.map((sg) => (horizontal ? subgraphSizes.get(sg.id)!.height : subgraphSizes.get(sg.id)!.width)))
     : 0;
 
   // Subgraph containers
   for (const sg of topSubs) {
-    const { width, height } = sgSize.get(sg.id)!;
+    const { width, height } = subgraphSizes.get(sg.id)!;
     const pos: Vec2 = horizontal
       ? { x: cursor, y: 50 }
       : { x: 50, y: cursor };
@@ -188,6 +239,7 @@ export function diagramToFlow(diagram: Diagram): { nodes: FlowNode[]; edges: Flo
       position: pos,
       data: { label: sg.label, ...(sg.direction ? { direction: sg.direction } : {}) },
       style: { width, height },
+      zIndex: zIndex++,
     } as GroupFlowNode);
     cursor += (horizontal ? width : height) + ITEM_GAP;
   }
@@ -204,6 +256,7 @@ export function diagramToFlow(diagram: Diagram): { nodes: FlowNode[]; edges: Flo
       type: 'shape',
       position: pos,
       data: { label: n.label, shape: n.shape },
+      zIndex: zIndex++,
     } as ShapeFlowNode);
     cursor += (horizontal ? NODE_W : NODE_H) + ITEM_GAP;
   }
@@ -211,7 +264,9 @@ export function diagramToFlow(diagram: Diagram): { nodes: FlowNode[]; edges: Flo
   // ── Nested subgraphs (place relative to their parent) ───────────────────────
   for (let i = 0; i < nestedSubs.length; i++) {
     const sg = nestedSubs[i];
-    const relPos: Vec2 = { x: 20 + i * 16, y: 30 + i * 16 };
+    const { width, height } = subgraphSizes.get(sg.id)!;
+    // Increased spacing: was 20 + i*16, now 30 + i*24
+    const relPos: Vec2 = { x: 30 + i * 24, y: 50 + i * 24 };
     const parentAbs = absPos.get(sg.parentId!) ?? { x: 0, y: 0 };
     absPos.set(sg.id, { x: parentAbs.x + relPos.x, y: parentAbs.y + relPos.y });
     allNodes.push({
@@ -219,9 +274,10 @@ export function diagramToFlow(diagram: Diagram): { nodes: FlowNode[]; edges: Flo
       type: 'group',
       position: relPos,
       data: { label: sg.label, ...(sg.direction ? { direction: sg.direction } : {}) },
-      style: { width: 380, height: 260 },
+      style: { width, height },
       parentId: sg.parentId,
       extent: 'parent',
+      zIndex: zIndex++,
     } as GroupFlowNode);
   }
 
@@ -236,6 +292,7 @@ export function diagramToFlow(diagram: Diagram): { nodes: FlowNode[]; edges: Flo
       data: { label: n.label, shape: n.shape },
       parentId: n.subgraphId,
       extent: 'parent' as const,
+      zIndex: zIndex++,
     } as ShapeFlowNode);
   }
 

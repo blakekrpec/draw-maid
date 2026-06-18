@@ -105,6 +105,7 @@ interface DiagramState {
   addSubgraph: () => void;
   updateSubgraphLabel: (id: string, label: string) => void;
   setSubgraphDirection: (id: string, direction: FlowDirection | undefined) => void;
+  setSubgraphParent: (subgraphId: string, parentId: string | null) => void;
   removeSubgraph: (id: string) => void;
 
   // Edge actions
@@ -186,6 +187,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => {
       record();
       const { nodes } = get();
       const count = nodes.filter(isShapeNode).length;
+      const maxZ = Math.max(0, ...nodes.map((n) => n.zIndex ?? 0));
       const node: ShapeFlowNode = {
         id: nextNodeId(nodes),
         type: 'shape',
@@ -193,6 +195,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => {
         position: { x: 80 + (count % 4) * 200, y: 80 + Math.floor(count / 4) * 130 },
         data: { label: 'New node', shape: 'rectangle' },
         selected: true,
+        zIndex: maxZ + 1, // Bring new node to front
       };
       set((s) => ({
         nodes: sortParentsFirst([...s.nodes.map((n) => ({ ...n, selected: false })), node]),
@@ -256,7 +259,9 @@ export const useDiagramStore = create<DiagramState>((set, get) => {
 
     addSubgraph: () => {
       record();
-      const groups = get().nodes.filter(isGroupNode);
+      const { nodes } = get();
+      const groups = nodes.filter(isGroupNode);
+      const maxZ = Math.max(0, ...nodes.map((n) => n.zIndex ?? 0));
       const group: GroupFlowNode = {
         id: nextSubgraphId(groups),
         type: 'group',
@@ -264,6 +269,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => {
         data: { label: 'Subgraph' },
         style: { width: 340, height: 240 },
         selected: true,
+        zIndex: maxZ + 1, // Bring new subgraph to front
       };
       set((s) => ({
         nodes: sortParentsFirst([group, ...s.nodes.map((n) => ({ ...n, selected: false }))]),
@@ -288,6 +294,32 @@ export const useDiagramStore = create<DiagramState>((set, get) => {
           n.id === id && isGroupNode(n) ? { ...n, data: { ...n.data, direction } } : n,
         ),
       }));
+    },
+
+    setSubgraphParent: (subgraphId, parentId) => {
+      record();
+      set((s) => {
+        const map = byId(s.nodes);
+        const subgraph = map.get(subgraphId);
+        if (!subgraph) return {};
+        // Convert to an absolute position, then re-relativise to the new parent
+        // so the subgraph stays visually put when its grouping changes.
+        const abs = absolutePosition(subgraph, map);
+        let position = abs;
+        let newParentId: string | undefined;
+        let extent: 'parent' | undefined;
+        const parent = parentId ? map.get(parentId) : undefined;
+        if (parent) {
+          const parentAbs = absolutePosition(parent, map);
+          position = { x: abs.x - parentAbs.x, y: abs.y - parentAbs.y };
+          newParentId = parentId ?? undefined;
+          extent = 'parent';
+        }
+        const nodes = s.nodes.map((n) =>
+          n.id === subgraphId ? { ...n, position, parentId: newParentId, extent } : n,
+        );
+        return { nodes: sortParentsFirst(nodes) };
+      });
     },
 
     removeSubgraph: (id) => {
@@ -353,6 +385,8 @@ export const useDiagramStore = create<DiagramState>((set, get) => {
 
     onNodesChange: (changes) => {
       const removals = changes.filter((c) => c.type === 'remove');
+      const selections = changes.filter((c) => c.type === 'select');
+      
       // Coalesce the node+edge removals React Flow emits for one delete press.
       if (removals.length) record('delete');
       const oldMap = byId(get().nodes);
@@ -372,6 +406,20 @@ export const useDiagramStore = create<DiagramState>((set, get) => {
         );
         nodes = sortParentsFirst(nodes);
       }
+      
+      // Bring newly selected nodes to front
+      if (selections.length > 0) {
+        const selectedIds = new Set(
+          selections.filter((c) => c.selected === true).map((c) => c.id)
+        );
+        if (selectedIds.size > 0) {
+          const maxZ = Math.max(0, ...nodes.map((n) => n.zIndex ?? 0));
+          nodes = nodes.map((n) =>
+            selectedIds.has(n.id) ? { ...n, zIndex: maxZ + 1 } : n
+          );
+        }
+      }
+      
       set((s) => ({
         nodes,
         selectedNodeId:
@@ -394,7 +442,20 @@ export const useDiagramStore = create<DiagramState>((set, get) => {
       }));
     },
 
-    selectNode: (id) => set({ selectedNodeId: id }),
+    selectNode: (id) => {
+      set((s) => {
+        // Bring selected node to front by giving it the highest z-index
+        if (!id) return { selectedNodeId: id };
+        
+        const maxZ = Math.max(0, ...s.nodes.map((n) => n.zIndex ?? 0));
+        return {
+          selectedNodeId: id,
+          nodes: s.nodes.map((n) => 
+            n.id === id ? { ...n, zIndex: maxZ + 1 } : n
+          ),
+        };
+      });
+    },
     selectEdge: (id) => set({ selectedEdgeId: id }),
 
     setSelectedNodes: (ids) => {
