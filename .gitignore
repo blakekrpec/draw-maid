@@ -12,3 +12,10 @@ dist-ssr
 # Logs
 *.log
 npm-debug.log*
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
