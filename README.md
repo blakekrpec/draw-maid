@@ -88,9 +88,9 @@ src/
 ```
 
 ## TODO
-- [ ] Nested subgraph support
+- [x] Nested subgraph support
 - [ ] Save / load diagrams (localStorage + download/upload `.json` and `.mmd`).
 - [ ] More diagram types (sequence, class, state).
-- [ ] **Import**: parse existing Mermaid text → model
-- [ ] Undo / redo.
+- [x] **Import**: parse existing Mermaid text → model
+- [x] Undo / redo.
 - [ ] Export the preview as SVG / PNG.
